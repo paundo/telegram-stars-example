@@ -1,6 +1,11 @@
 
 import { Bot, webhookCallback } from "grammy";
 
+
+import {getURL} from "vercel-grammy"
+
+const url = getURL({path: "api/index"})
+
 const bot = new Bot("8110616423:AAEJcLN6eXqk-geUKsO-lLAcm90kKwUzkCQ");
 
 // Map is used to keep track of users who have paid. In a production scenario, replace with a robust database solution.
@@ -97,4 +102,6 @@ bot.command("refund", (ctx) => {
 // Starts the bot and makes it ready to receive updates and process commands.
 //bot.start();
 
-export default webhookCallback(bot, "https");
+//export default webhookCallback(bot, "https");
+
+await bot.api.setWebhook(url)

@@ -4,6 +4,7 @@
   },
   "dependencies": {
     "grammy": "^1.25.1",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vercel-grammy": "^1.0.0"
   }
 }
