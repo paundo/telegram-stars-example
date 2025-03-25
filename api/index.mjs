@@ -95,6 +95,6 @@ bot.command("refund", (ctx) => {
 });
 
 // Starts the bot and makes it ready to receive updates and process commands.
-bot.start();
+//bot.start();
 
 export default webhookCallback(bot, "https");
