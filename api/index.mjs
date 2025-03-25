@@ -1,5 +1,5 @@
 
-import { Bot } from "grammy";
+import { Bot, webhookCallback } from "grammy";
 
 const bot = new Bot("8110616423:AAEJcLN6eXqk-geUKsO-lLAcm90kKwUzkCQ");
 
@@ -95,4 +95,5 @@ bot.command("refund", (ctx) => {
 });
 
 // Starts the bot and makes it ready to receive updates and process commands.
-bot.start();
+export default webhookCallback(bot, "https");
+//bot.start();
