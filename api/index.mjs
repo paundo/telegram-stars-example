@@ -1,7 +1,7 @@
 
 import { Bot } from "grammy";
 
-const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Bot("8110616423:AAEJcLN6eXqk-geUKsO-lLAcm90kKwUzkCQ");
 
 // Map is used to keep track of users who have paid. In a production scenario, replace with a robust database solution.
 const paidUsers = new Map();
