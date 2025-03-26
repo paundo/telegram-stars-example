@@ -143,5 +143,4 @@ bot.command("refund", (ctx) => {
 
 // Pokretanje bota
 //bot.start();
-
 export default webhookCallback(bot, "https");
