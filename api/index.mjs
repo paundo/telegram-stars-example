@@ -40,6 +40,7 @@ bot.command("pay", (ctx) => {
   );
 });
 
+
 /*
     Handles the pre_checkout_query event.
     Telegram sends this event to the bot when a user clicks the payment button.
@@ -101,6 +102,9 @@ bot.command("refund", (ctx) => {
 
 // Starts the bot and makes it ready to receive updates and process commands.
 //bot.start();
+bot.command("1", (ctx) => {
+  return ctx.reply("Selektovali ste komandu 1!");
+});
 
 
 export default webhookCallback(bot, "https");
