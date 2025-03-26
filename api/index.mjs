@@ -104,7 +104,8 @@ bot.command("refund", (ctx) => {
 
 // Starts the bot and makes it ready to receive updates and process commands.
 //bot.start();
-bot.command("1", (ctx) => {
+
+/*bot.command("1", (ctx) => {
   return ctx.replyWithInvoice(
     "Predikcija utakmice Real Madrid - Barselona",                  // Product name
     "Real Madrid - Barselona",              // Product description
@@ -113,7 +114,15 @@ bot.command("1", (ctx) => {
     [{ amount: 1, label: "Real Madrid - Barselona" }], // Price breakdown
   );
 });
-
+*/
+bot.command("1", (ctx) => {
+  // Check if the user has paid
+  if (paidUsers.has(ctx.from.id)) {
+    return ctx.reply("Prognoza utakmice Real Madrid - Barselona: Real Madrid će pobediti!");
+  } else {
+    return ctx.reply("You need to make a payment to receive the prediction.");
+  }
+});
 
 export default webhookCallback(bot, "https");
 
