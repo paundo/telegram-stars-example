@@ -1,11 +1,14 @@
-import { Bot, webhookCallback } from "grammy";
-import { getURL } from "vercel-grammy";
 
-const url = getURL({ path: "api/index" });
+import { Bot, webhookCallback } from "grammy";
+
+
+import {getURL} from "vercel-grammy"
+
+const url = getURL({path: "api/index"})
 
 const bot = new Bot("8110616423:AAEJcLN6eXqk-geUKsO-lLAcm90kKwUzkCQ");
 
-// Map to track paid users and which game they paid for
+// Map is used to keep track of users who have paid. In a production scenario, replace with a robust database solution.
 const paidUsers = new Map();
 
 /*
@@ -16,44 +19,34 @@ bot.command("start", (ctx) =>
   ctx.reply(
     `Welcome! I am a simple bot that can accept payments via Telegram Stars. The following commands are available:
 
-/1 - Get a prediction for Real Madrid vs Barcelona (pay for this)
-/2 - Get a prediction for Chelsea vs Liverpool (pay for this)
-/status - Check if you've paid
-/refund - Request a refund`
-  )
+/pay - to pay
+/status - to check payment status
+/refund - to refund payment
+/1 - Prognoza utakmice Real Madrid - Barselona
+`,
+  ),
 );
 
 /*
-    Handles the /1 command.
-    This will generate an invoice for Real Madrid vs Barcelona prediction.
+    Handles the /pay command.
+    Generates an invoice that users can click to make a payment. The invoice includes the product name, description, and payment options.
+    Note: Replace "Test Product", "Test description", and other placeholders with actual values in production.
 */
-bot.command("1", (ctx) => {
+bot.command("pay", (ctx) => {
   return ctx.replyWithInvoice(
-    "Prognoza utakmice Real Madrid - Barselona", // Product name
-    "Plaćanje za prognozu utakmice Real Madrid - Barselona", // Product description
-    "pay1",  // Payload to identify this payment
-    "XTR", // Currency
-    [{ amount: 1, label: "Prognoza utakmice Real Madrid - Barselona" }] // Price breakdown (1 XTR)
+    "Test Product",                  // Product name
+    "Test description",              // Product description
+    "{}",                            // Payload (replace with meaningful data)
+    "XTR",                           // Currency
+    [{ amount: 1, label: "Test Product" }], // Price breakdown
   );
 });
 
-/*
-    Handles the /2 command.
-    This will generate an invoice for Chelsea vs Liverpool prediction.
-*/
-bot.command("2", (ctx) => {
-  return ctx.replyWithInvoice(
-    "Prognoza utakmice Čelzi - Liverpul", // Product name
-    "Plaćanje za prognozu utakmice Čelzi - Liverpul", // Product description
-    "pay2",  // Payload to identify this payment
-    "XTR", // Currency
-    [{ amount: 1, label: "Prognoza utakmice Čelzi - Liverpul" }] // Price breakdown (1 XTR)
-  );
-});
 
 /*
     Handles the pre_checkout_query event.
-    Responds to Telegram when a user clicks the payment button.
+    Telegram sends this event to the bot when a user clicks the payment button.
+    The bot must respond with answerPreCheckoutQuery within 10 seconds to confirm or cancel the transaction.
 */
 bot.on("pre_checkout_query", (ctx) => {
   return ctx.answerPreCheckoutQuery(true).catch(() => {
@@ -71,14 +64,12 @@ bot.on("message:successful_payment", (ctx) => {
     return;
   }
 
-  // Determine which game the user paid for
-  if (ctx.message.successful_payment.invoice_payload === "pay1") {
-    paidUsers.set(ctx.from.id, "real_madrid_barselona"); // User paid for Real Madrid vs Barcelona prediction
-  } else if (ctx.message.successful_payment.invoice_payload === "pay2") {
-    paidUsers.set(ctx.from.id, "chelsea_liverpool"); // User paid for Chelsea vs Liverpool prediction
-  }
+  paidUsers.set(
+    ctx.from.id,                                     // User ID
+    ctx.message.successful_payment.telegram_payment_charge_id, // Payment ID
+  );
 
-  console.log("Payment received: ", ctx.message.successful_payment); // Logs payment details
+  console.log(ctx.message.successful_payment); // Logs payment details
 });
 
 /*
@@ -87,8 +78,8 @@ bot.on("message:successful_payment", (ctx) => {
 */
 bot.command("status", (ctx) => {
   const message = paidUsers.has(ctx.from.id)
-    ? "You have paid and can access the prediction."  // User has paid
-    : "You have not paid yet. Please make a payment to access the prediction.";  // User has not paid
+    ? "You have paid"            // User has paid
+    : "You have not paid yet";   // User has not paid
   return ctx.reply(message);
 });
 
@@ -99,47 +90,32 @@ bot.command("status", (ctx) => {
 bot.command("refund", (ctx) => {
   const userId = ctx.from.id;
   if (!paidUsers.has(userId)) {
-    return ctx.reply("You have not paid yet, there is nothing to refund.");
+    return ctx.reply("You have not paid yet, there is nothing to refund");
   }
 
-  // Refund logic (if applicable with your payment processor)
-  // This part is just a placeholder, as refunding depends on the specific system you are using
-  // Example: Refund via the Telegram Stars API or other payment processors
   ctx.api
-    .refundStarPayment(userId, paidUsers.get(userId)) // Assuming this is a valid refund call
+    .refundStarPayment(userId, paidUsers.get(userId)) // Initiates the refund
     .then(() => {
       paidUsers.delete(userId); // Removes the user from the paidUsers map
-      return ctx.reply("Refund successful.");
+      return ctx.reply("Refund successful");
     })
-    .catch(() => {
-      return ctx.reply("Refund failed. Please contact support.");
-    });
+    .catch(() => ctx.reply("Refund failed")); // Handles refund errors
 });
 
-/*
-    Handles the /1 command after payment.
-    This will return the prediction for Real Madrid vs Barcelona if the user has paid for it.
-*/
+// Starts the bot and makes it ready to receive updates and process commands.
+//bot.start();
 bot.command("1", (ctx) => {
-  // Check if the user has paid for Real Madrid vs Barcelona
-  if (paidUsers.get(ctx.from.id) === "real_madrid_barselona") {
-    return ctx.reply("Prognoza utakmice Real Madrid - Barselona: Real Madrid će pobediti!");
-  } else {
-    return ctx.reply("You need to make a payment for Real Madrid vs Barcelona prediction first.");
-  }
+  return ctx.replyWithInvoice(
+    "Predikcija utakmice Real Madrid - Barselona",                  // Product name
+    "Real Madrid - Barselona",              // Product description
+    "{}",                            // Payload (replace with meaningful data)
+    "XTR",                           // Currency
+    [{ amount: 1, label: "Real Madrid - Barselona" }], // Price breakdown
+  );
 });
 
-/*
-    Handles the /2 command after payment.
-    This will return the prediction for Chelsea vs Liverpool if the user has paid for it.
-*/
-bot.command("2", (ctx) => {
-  // Check if the user has paid for Chelsea vs Liverpool
-  if (paidUsers.get(ctx.from.id) === "chelsea_liverpool") {
-    return ctx.reply("Prognoza utakmice Čelzi - Liverpul: Čelzi će pobediti!");
-  } else {
-    return ctx.reply("You need to make a payment for Chelsea vs Liverpool prediction first.");
-  }
-});
+
 
 export default webhookCallback(bot, "https");
+
+//export default await bot.api.setWebhook(url)
