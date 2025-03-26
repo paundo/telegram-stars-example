@@ -1,17 +1,17 @@
 import { Bot, InlineKeyboard, webhookCallback } from "grammy";
-//import dotenv from "dotenv";
-import { getURL } from "vercel-grammy";
+
 
 //dotenv.config();
 
 //const bot = new Bot(process.env.BOT_TOKEN);
 const bot = new Bot("8110616423:AAEJcLN6eXqk-geUKsO-lLAcm90kKwUzkCQ");
-const url = getURL({ path: "api/index" });
+
+const paidUsers = new Map();
 
 const ITEMS = {
   ice_cream: {
     name: "Ice Cream 🍦",
-    price: 1,
+    price: 1, // cijena u jedinicama (1 = 1 XTR)
     description: "A delicious virtual ice cream",
     secret: "FROZEN2025"
   },
@@ -31,111 +31,115 @@ const ITEMS = {
 
 const MESSAGES = {
   welcome: "Welcome to the Digital Store! 🎉\nSelect an item to purchase with Telegram Stars:",
-  help: "🛍 *Digital Store Bot Help*\n\nCommands:\n/start - View available items\n/help - Show this help message\n/refund - Request a refund (requires transaction ID)\n\nHow to use:\n1. Use /start to see available items\n2. Click on an item to purchase\n3. Pay with Stars\n4. Receive your secret code\n5. Use /refund to get a refund if needed",
+  help: `🛍 *Digital Store Bot Help*
+  
+Commands:
+/start - View available items
+/help - Show this help message
+/status - Check payment status
+/refund - Request a refund (requires transaction ID)`,
   refund_success: "✅ Refund processed successfully!\nThe Stars have been returned to your balance.",
   refund_failed: "❌ Refund could not be processed.\nPlease try again later or contact support.",
   refund_usage: "Please provide the transaction ID after the /refund command.\nExample: `/refund YOUR_TRANSACTION_ID`"
 };
 
-const STATS = {
-  purchases: new Map(),
-  refunds: new Map()
-};
-
-bot.command("start", async (ctx) => {
+// /start – prikazuje tastaturu sa artiklima
+bot.command("start", (ctx) => {
   const keyboard = new InlineKeyboard();
-  
   for (const itemId in ITEMS) {
     const item = ITEMS[itemId];
     keyboard.text(`${item.name} - ${item.price} ⭐`, itemId).row();
   }
-  
-  await ctx.reply(MESSAGES.welcome, {
-    reply_markup: keyboard
-  });
+  return ctx.reply(MESSAGES.welcome, { reply_markup: keyboard });
 });
 
-bot.command("help", async (ctx) => {
-  await ctx.reply(MESSAGES.help, { parse_mode: "Markdown" });
+// /help – prikazuje help poruku
+bot.command("help", (ctx) => ctx.reply(MESSAGES.help, { parse_mode: "Markdown" }));
+
+// /pay – test komanda za slanje fakture
+bot.command("pay", (ctx) => {
+  return ctx.replyWithInvoice(
+    "Test Product",                  // Product name
+    "Test description",              // Product description
+    "{}",                            // Payload (može biti prazan JSON string ili neki identifikator)
+    "XTR",                           // Currency
+    [{ amount: 100, label: "Test Product" }] // Cijena u najmanjim jedinicama (npr. 100 = 1 XTR ako je 1 XTR = 100 jedinica)
+  );
 });
 
-bot.command("status", async (ctx) => {
-  const message = STATS.purchases.has(ctx.from.id)
-    ? "You have paid."
-    : "You have not paid yet.";
-  await ctx.reply(message);
-});
-
-bot.command("refund", async (ctx) => {
-  const args = ctx.message.text.split(" ").slice(1);
-  if (!args.length) {
-    return ctx.reply(MESSAGES.refund_usage);
-  }
-
-  const chargeId = args[0];
-  const userId = ctx.from.id;
-
-  try {
-    const success = await bot.api.refundStarPayment(userId, chargeId);
-    if (success) {
-      STATS.refunds.set(userId, (STATS.refunds.get(userId) || 0) + 1);
-      await ctx.reply(MESSAGES.refund_success);
-    } else {
-      await ctx.reply(MESSAGES.refund_failed);
-    }
-  } catch (error) {
-    console.error("Refund error:", error);
-    await ctx.reply(`❌ Error processing refund: ${error.message}`);
-  }
-});
-
+// Callback handler – kada korisnik pritisne dugme na tastaturi
 bot.on("callback_query:data", async (ctx) => {
   const itemId = ctx.callbackQuery.data;
   const item = ITEMS[itemId];
-  
   if (!item) return;
-  
+
   try {
     await ctx.answerCallbackQuery();
-    
-    await ctx.api.sendInvoice(ctx.from.id, {
-      title: item.name,
-      description: item.description,
-      payload: itemId,
-      provider_token: "", // Empty for digital goods
-      currency: "XTR",
-      prices: [{ label: item.name, amount: item.price }],
-      start_parameter: "start_parameter"
-    });
+    // Koristi replyWithInvoice za slanje fakture
+    await ctx.replyWithInvoice(
+      item.name,
+      item.description,
+      itemId, // Payload – ovdje se koristi itemId
+      "XTR",
+      [{ amount: item.price, label: item.name }],
+      { start_parameter: "start_parameter" }
+    );
   } catch (error) {
     console.error("Error in button handler:", error);
     await ctx.reply("Sorry, something went wrong while processing your request.");
   }
 });
 
-bot.on("pre_checkout_query", async (ctx) => {
+// Pre-checkout query – Telegram traži potvrdu prije plaćanja
+bot.on("pre_checkout_query", (ctx) => {
+  // Ako payload iz fakture odgovara jednom od artikala, potvrdi plaćanje
   const isValid = ITEMS.hasOwnProperty(ctx.preCheckoutQuery.invoice_payload);
-  await ctx.answerPreCheckoutQuery(isValid, isValid ? undefined : "Something went wrong...");
+  return ctx.answerPreCheckoutQuery(isValid, isValid ? undefined : "Something went wrong...");
 });
 
-bot.on("successful_payment", async (ctx) => {
+// Kada se plaćanje uspješno izvrši, sačuvaj podatke i prikaži secret kod
+bot.on("message:successful_payment", (ctx) => {
+  if (!ctx.message || !ctx.message.successful_payment || !ctx.from) return;
+  
   const payment = ctx.message.successful_payment;
   const itemId = payment.invoice_payload;
   const item = ITEMS[itemId];
-  const userId = ctx.from.id;
-
-  STATS.purchases.set(userId, (STATS.purchases.get(userId) || 0) + 1);
-
-  console.log(`Successful payment from user ${userId} for item ${itemId}`);
-
-  await ctx.reply(
-    `Thank you for your purchase! 🎉\n\nHere's your secret code for ${item.name}:\n\`${item.secret}\`\n\nTo get a refund, use this command:\n\`/refund ${payment.telegram_payment_charge_id}\`\n\nSave this message to request a refund later if needed.`,
-    { parse_mode: "Markdown" }
+  
+  // Čuvamo ID plaćanja
+  paidUsers.set(ctx.from.id, payment.telegram_payment_charge_id);
+  console.log("Successful payment:", payment);
+  
+  return ctx.reply(
+    `Uspešno ste platili uslugu!\n\n` +
+    `Tajni kod za ${item.name} je: *${item.secret}*\n\n` +
+    `Čuvajte ovu poruku za eventualan refund.`
   );
 });
 
-bot.catch((err) => {
-  console.error("Bot encountered an error:", err);
+// /status – provjerava status plaćanja
+bot.command("status", (ctx) => {
+  const message = paidUsers.has(ctx.from.id)
+    ? "You have paid"
+    : "You have not paid yet";
+  return ctx.reply(message);
 });
+
+// /refund – pokreće refund ako je korisnik platio
+bot.command("refund", (ctx) => {
+  const userId = ctx.from.id;
+  if (!paidUsers.has(userId)) {
+    return ctx.reply("You have not paid yet, there is nothing to refund");
+  }
+  return ctx.api
+    .refundStarPayment(userId, paidUsers.get(userId))
+    .then(() => {
+      paidUsers.delete(userId);
+      return ctx.reply("Refund successful");
+    })
+    .catch(() => ctx.reply("Refund failed"));
+});
+
+// Pokretanje bota
+//bot.start();
 
 export default webhookCallback(bot, "https");
