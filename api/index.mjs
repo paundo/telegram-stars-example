@@ -1,5 +1,7 @@
 import { Bot, InlineKeyboard, webhookCallback } from "grammy";
+import {getURL} from "vercel-grammy"
 
+const url = getURL({path: "api/index"})
 
 //dotenv.config();
 
