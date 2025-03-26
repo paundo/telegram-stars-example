@@ -21,9 +21,7 @@ bot.command("start", (ctx) =>
 
 /pay - to pay
 /status - to check payment status
-/refund - to refund payment
-/1 - Prognoza utakmice Real Madrid - Barselona
-`,
+/refund - to refund payment`,
   ),
 );
 
@@ -104,16 +102,6 @@ bot.command("refund", (ctx) => {
 
 // Starts the bot and makes it ready to receive updates and process commands.
 //bot.start();
-bot.command("1", (ctx) => {
-  return ctx.replyWithInvoice(
-    "Predikcija utakmice Real Madrid - Barselona",                  // Product name
-    "Real Madrid - Barselona",              // Product description
-    "{}",                            // Payload (replace with meaningful data)
-    "XTR",                           // Currency
-    [{ amount: 1, label: "Real Madrid - Barselona" }], // Price breakdown
-  );
-});
-
 
 
 export default webhookCallback(bot, "https");
