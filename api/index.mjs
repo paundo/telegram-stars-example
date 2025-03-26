@@ -103,6 +103,6 @@ bot.command("refund", (ctx) => {
 //bot.start();
 
 
-//export default webhookCallback(bot, "https");
+export default webhookCallback(bot, "https");
 
-export default await bot.api.setWebhook(url)
+//export default await bot.api.setWebhook(url)
