@@ -67,6 +67,8 @@ bot.on("message:successful_payment", (ctx) => {
     ctx.message.successful_payment.telegram_payment_charge_id, // Payment ID
   );
 
+  return ctx.reply("Uspešno ste platili uslugu!");
+
   console.log(ctx.message.successful_payment); // Logs payment details
 });
 
