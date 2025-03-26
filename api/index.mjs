@@ -1,111 +1,140 @@
+import { Bot, InlineKeyboard, webhookCallback } from "grammy";
+import dotenv from "dotenv";
+import { getURL } from "vercel-grammy";
 
-import { Bot, webhookCallback } from "grammy";
+dotenv.config();
 
+const bot = new Bot(process.env.BOT_TOKEN);
+const url = getURL({ path: "api/index" });
 
-import {getURL} from "vercel-grammy"
+const ITEMS = {
+  ice_cream: {
+    name: "Ice Cream 🍦",
+    price: 1,
+    description: "A delicious virtual ice cream",
+    secret: "FROZEN2025"
+  },
+  cookie: {
+    name: "Cookie 🍪",
+    price: 3,
+    description: "A sweet virtual cookie",
+    secret: "SWEET2025"
+  },
+  hamburger: {
+    name: "Hamburger 🍔",
+    price: 5,
+    description: "A tasty virtual hamburger",
+    secret: "BURGER2025"
+  }
+};
 
-const url = getURL({path: "api/index"})
+const MESSAGES = {
+  welcome: "Welcome to the Digital Store! 🎉\nSelect an item to purchase with Telegram Stars:",
+  help: "🛍 *Digital Store Bot Help*\n\nCommands:\n/start - View available items\n/help - Show this help message\n/refund - Request a refund (requires transaction ID)\n\nHow to use:\n1. Use /start to see available items\n2. Click on an item to purchase\n3. Pay with Stars\n4. Receive your secret code\n5. Use /refund to get a refund if needed",
+  refund_success: "✅ Refund processed successfully!\nThe Stars have been returned to your balance.",
+  refund_failed: "❌ Refund could not be processed.\nPlease try again later or contact support.",
+  refund_usage: "Please provide the transaction ID after the /refund command.\nExample: `/refund YOUR_TRANSACTION_ID`"
+};
 
-const bot = new Bot("8110616423:AAEJcLN6eXqk-geUKsO-lLAcm90kKwUzkCQ");
+const STATS = {
+  purchases: new Map(),
+  refunds: new Map()
+};
 
-// Map is used to keep track of users who have paid. In a production scenario, replace with a robust database solution.
-const paidUsers = new Map();
-
-/*
-    Handles the /start command.
-    Sends a welcome message to the user and explains the available commands for interacting with the bot.
-*/
-bot.command("start", (ctx) =>
-  ctx.reply(
-    `Welcome! I am a simple bot that can accept payments via Telegram Stars. The following commands are available:
-
-/pay - to pay
-/status - to check payment status
-/refund - to refund payment`,
-  ),
-);
-
-/*
-    Handles the /pay command.
-    Generates an invoice that users can click to make a payment. The invoice includes the product name, description, and payment options.
-    Note: Replace "Test Product", "Test description", and other placeholders with actual values in production.
-*/
-bot.command("pay", (ctx) => {
-  return ctx.replyWithInvoice(
-    "Test Product",                  // Product name
-    "Test description",              // Product description
-    "{}",                            // Payload (replace with meaningful data)
-    "XTR",                           // Currency
-    [{ amount: 1, label: "Test Product" }], // Price breakdown
-  );
-});
-
-
-/*
-    Handles the pre_checkout_query event.
-    Telegram sends this event to the bot when a user clicks the payment button.
-    The bot must respond with answerPreCheckoutQuery within 10 seconds to confirm or cancel the transaction.
-*/
-bot.on("pre_checkout_query", (ctx) => {
-  return ctx.answerPreCheckoutQuery(true).catch(() => {
-    console.error("answerPreCheckoutQuery failed");
+bot.command("start", async (ctx) => {
+  const keyboard = new InlineKeyboard();
+  
+  for (const itemId in ITEMS) {
+    const item = ITEMS[itemId];
+    keyboard.text(`${item.name} - ${item.price} ⭐`, itemId).row();
+  }
+  
+  await ctx.reply(MESSAGES.welcome, {
+    reply_markup: keyboard
   });
 });
 
-/*
-    Handles the message:successful_payment event.
-    This event is triggered when a payment is successfully processed.
-    Updates the paidUsers map to record the payment details and logs the successful payment.
-*/
-bot.on("message:successful_payment", (ctx) => {
-  if (!ctx.message || !ctx.message.successful_payment || !ctx.from) {
-    return;
+bot.command("help", async (ctx) => {
+  await ctx.reply(MESSAGES.help, { parse_mode: "Markdown" });
+});
+
+bot.command("status", async (ctx) => {
+  const message = STATS.purchases.has(ctx.from.id)
+    ? "You have paid."
+    : "You have not paid yet.";
+  await ctx.reply(message);
+});
+
+bot.command("refund", async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1);
+  if (!args.length) {
+    return ctx.reply(MESSAGES.refund_usage);
   }
 
-  paidUsers.set(
-    ctx.from.id,                                     // User ID
-    ctx.message.successful_payment.telegram_payment_charge_id, // Payment ID
-  );
-
-  return ctx.reply("Uspešno ste platili uslugu!");
-
-  console.log(ctx.message.successful_payment); // Logs payment details
-});
-
-/*
-    Handles the /status command.
-    Checks if the user has made a payment and responds with their payment status.
-*/
-bot.command("status", (ctx) => {
-  const message = paidUsers.has(ctx.from.id)
-    ? "You have paid"            // User has paid
-    : "You have not paid yet";   // User has not paid
-  return ctx.reply(message);
-});
-
-/*
-    Handles the /refund command.
-    Refunds the payment made by the user if applicable. If the user hasn't paid, informs them that no refund is possible.
-*/
-bot.command("refund", (ctx) => {
+  const chargeId = args[0];
   const userId = ctx.from.id;
-  if (!paidUsers.has(userId)) {
-    return ctx.reply("You have not paid yet, there is nothing to refund");
-  }
 
-  ctx.api
-    .refundStarPayment(userId, paidUsers.get(userId)) // Initiates the refund
-    .then(() => {
-      paidUsers.delete(userId); // Removes the user from the paidUsers map
-      return ctx.reply("Refund successful");
-    })
-    .catch(() => ctx.reply("Refund failed")); // Handles refund errors
+  try {
+    const success = await bot.api.refundStarPayment(userId, chargeId);
+    if (success) {
+      STATS.refunds.set(userId, (STATS.refunds.get(userId) || 0) + 1);
+      await ctx.reply(MESSAGES.refund_success);
+    } else {
+      await ctx.reply(MESSAGES.refund_failed);
+    }
+  } catch (error) {
+    console.error("Refund error:", error);
+    await ctx.reply(`❌ Error processing refund: ${error.message}`);
+  }
 });
 
-// Starts the bot and makes it ready to receive updates and process commands.
-//bot.start();
+bot.on("callback_query:data", async (ctx) => {
+  const itemId = ctx.callbackQuery.data;
+  const item = ITEMS[itemId];
+  
+  if (!item) return;
+  
+  try {
+    await ctx.answerCallbackQuery();
+    
+    await ctx.api.sendInvoice(ctx.from.id, {
+      title: item.name,
+      description: item.description,
+      payload: itemId,
+      provider_token: "", // Empty for digital goods
+      currency: "XTR",
+      prices: [{ label: item.name, amount: item.price }],
+      start_parameter: "start_parameter"
+    });
+  } catch (error) {
+    console.error("Error in button handler:", error);
+    await ctx.reply("Sorry, something went wrong while processing your request.");
+  }
+});
 
+bot.on("pre_checkout_query", async (ctx) => {
+  const isValid = ITEMS.hasOwnProperty(ctx.preCheckoutQuery.invoice_payload);
+  await ctx.answerPreCheckoutQuery(isValid, isValid ? undefined : "Something went wrong...");
+});
+
+bot.on("successful_payment", async (ctx) => {
+  const payment = ctx.message.successful_payment;
+  const itemId = payment.invoice_payload;
+  const item = ITEMS[itemId];
+  const userId = ctx.from.id;
+
+  STATS.purchases.set(userId, (STATS.purchases.get(userId) || 0) + 1);
+
+  console.log(`Successful payment from user ${userId} for item ${itemId}`);
+
+  await ctx.reply(
+    `Thank you for your purchase! 🎉\n\nHere's your secret code for ${item.name}:\n\`${item.secret}\`\n\nTo get a refund, use this command:\n\`/refund ${payment.telegram_payment_charge_id}\`\n\nSave this message to request a refund later if needed.`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+bot.catch((err) => {
+  console.error("Bot encountered an error:", err);
+});
 
 export default webhookCallback(bot, "https");
-
-//export default await bot.api.setWebhook(url)
